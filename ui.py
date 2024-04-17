@@ -3,6 +3,7 @@ import re
 import bcrypt
 import secrets
 import string
+import pyperclip
 from user_accounts import *
 
 class Application:
@@ -231,13 +232,26 @@ class Application:
         self.password_display = ctk.CTkEntry(self.app_frame, width=200)
         self.password_display.grid(row=2, column=0, padx=20, pady=10)
 
+        # Copy button
+        copy_btn = ctk.CTkButton(self.app_frame, text="Copy", command=self.copy_to_clipboard)
+        copy_btn.grid(row=3, column=0, padx=10, pady=10)
+
+
+    def copy_to_clipboard(self):
+        password = self.password_display.get()
+        pyperclip.copy(password)
+        original_color = self.password_display.cget('fg_color')  # Get current foreground color
+        self.password_display.configure(fg_color="green")
+        self.root.after(1500, lambda: self.password_display.config(fg_color=original_color))  # Reset color after 1.5 seconds
+
+
+
     def generate_strong_password(self):
         # Example function to generate a strong password
         characters = string.ascii_letters + string.digits + "!@#$%^&*(),.?\":{}|<>"
         strong_password = ''.join(secrets.choice(characters) for i in range(12))  # Generates a 12-character password
         self.password_display.delete(0, 'end')  # Clear the previous password
         self.password_display.insert(0, strong_password)  # Display the generated password
-
 
     def open_password_vault(self):
         # Placeholder for Password Vault functionality
