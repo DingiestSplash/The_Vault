@@ -1,8 +1,9 @@
 import customtkinter as ctk
 import re
+import bcrypt
 import secrets
 import string
-from database import connect_db, create_user_table, insert_user, fetch_user, check_password
+from database import *
 
 class Application:
     def __init__(self, root):
@@ -10,6 +11,9 @@ class Application:
         self.conn = connect_db()  # Make sure connect_db() is correctly returning a connection object.
         self.cursor = self.conn.cursor()  # Initialize cursor here.
         self.create_main_frame()
+        
+    def set_cursor(self, cursor):
+        self.cursor = cursor
 
     def create_main_frame(self):
         # Destroy any existing frame first to clear the space
@@ -62,10 +66,10 @@ class Application:
             criteria_item.grid(row=index, columnspan=2, sticky='w', padx=20)
 
         submit_btn = ctk.CTkButton(self.frame, text="Create Account", command=self.handle_account_creation)
-        submit_btn.grid(row=8, columnspan=2, padx=10, pady=20)
+        submit_btn.grid(row=9, columnspan=2, padx=10, pady=5)
 
         back_btn = ctk.CTkButton(self.frame, text="Back", command=self.create_main_frame)
-        back_btn.grid(row=9, columnspan=2, pady=5)
+        back_btn.grid(row=10, columnspan=2, pady=5)
 
     def is_password_strong(self, password):
         # Check the password strength criteria
@@ -81,6 +85,11 @@ class Application:
             return False, "Password must contain at least one special character."
         return True, "Password is strong."
 
+    def username_exists(self, username):
+        self.cursor.execute('''SELECT COUNT(*) FROM accounts WHERE username = ?''', (username,))
+        # Fetch the result and return True if the count is greater than 0, indicating the username exists
+        return self.cursor.fetchone()[0] > 0
+
     def handle_account_creation(self):
         username = self.username_entry_create.get()
         password = self.password_entry_create.get()
@@ -89,12 +98,24 @@ class Application:
             error_label = ctk.CTkLabel(self.frame, text=message, fg_color="red")
             error_label.grid(row=3, columnspan=2)
             return
+    
+        if self.username_exists(username):
+            error_label = ctk.CTkLabel(self.frame, text="Username already exists.", fg_color="red" )
+            error_label.grid(row=8, columnspan=2)
+            return
+    
+        try:
+            # Hash the password using bcrypt
+            hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
         
-        insert_user(self.cursor, username, password)
-        self.conn.commit()
-        self.frame.destroy()
-        self.create_main_frame()
-
+            # Insert the username and hashed password into the database
+            insert_user(self.cursor, username, hashed_password.decode('utf-8'))  # Store the hashed password as a string
+            self.conn.commit()
+            self.frame.destroy()
+            self.create_main_frame()
+        except sqlite3.Error as e:
+            print("Error inserting user:", e)
+        
 
     def login(self):
         self.create_account_btn.grid_remove()
@@ -112,11 +133,14 @@ class Application:
         self.password_entry_login = ctk.CTkEntry(self.frame, show="*")
         self.password_entry_login.grid(row=1, column=1, padx=10, pady=5)
 
-        error_label = ctk.CTkLabel(self.frame, text="", fg_color="red")
-        error_label.grid(row=3, columnspan=2)
+        error_label = ctk.CTkLabel(self.frame, text="Usernames & Passwords are case sensitive.")
+        error_label.grid(row=2, columnspan=2)
 
         submit_btn = ctk.CTkButton(self.frame, text="Login", command=lambda: self.handle_login(error_label))
-        submit_btn.grid(row=2, columnspan=2, padx=10, pady=5)
+        submit_btn.grid(row=3, columnspan=2, padx=10, pady=5)
+        
+        back_btn = ctk.CTkButton(self.frame, text="Back", command=self.create_main_frame)
+        back_btn.grid(row=4, columnspan=2, pady=5)
 
     def handle_login(self, error_label):
         username = self.username_entry_login.get()
