@@ -45,13 +45,21 @@ class Application:
 
         password_label = ctk.CTkLabel(self.frame, text="Password:")
         password_label.grid(row=1, column=0, padx=10, pady=5)
+        self.password_entry_create = ctk.CTkEntry(self.frame, show="*")
+        self.password_entry_create.grid(row=1, column=1, padx=10, pady=5)
+
+        # Add password confirmation entry
+        password_confirm_label = ctk.CTkLabel(self.frame, text="Confirm Password:")
+        password_confirm_label.grid(row=2, column=0, padx=10, pady=5)
+        self.password_entry_confirm = ctk.CTkEntry(self.frame, show="*")
+        self.password_entry_confirm.grid(row=2, column=1, padx=10, pady=5)
 
         self.password_entry_create = ctk.CTkEntry(self.frame, show="*")
         self.password_entry_create.grid(row=1, column=1, padx=10, pady=5)
 
         # Password criteria list
         criteria_label = ctk.CTkLabel(self.frame, text="Password must include at least:")
-        criteria_label.grid(row=2, columnspan=2)
+        criteria_label.grid(row=3, columnspan=2)
 
         criteria_list = [
         "8 characters minimum",
@@ -93,28 +101,35 @@ class Application:
     def handle_account_creation(self):
         username = self.username_entry_create.get()
         password = self.password_entry_create.get()
+        password_confirm = self.password_entry_confirm.get()
+
+        if password != password_confirm:
+            error_label = ctk.CTkLabel(self.frame, text="Passwords do not match.", fg_color="red")
+            error_label.grid(row=8, columnspan=2)
+            return
+
         valid, message = self.is_password_strong(password)
         if not valid:
             error_label = ctk.CTkLabel(self.frame, text=message, fg_color="red")
             error_label.grid(row=3, columnspan=2)
             return
-    
+
         if self.username_exists(username):
-            error_label = ctk.CTkLabel(self.frame, text="Username already exists.", fg_color="red" )
+            error_label = ctk.CTkLabel(self.frame, text="Username already exists.", fg_color="red")
             error_label.grid(row=8, columnspan=2)
             return
-    
+
         try:
-            # Hash the password using bcrypt
+        # Hash the password using bcrypt, directly storing the bytes
             hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
-        
-            # Insert the username and hashed password into the database
-            insert_user(self.cursor, username, hashed_password.decode('utf-8'))  # Store the hashed password as a string
+            insert_user(self.cursor, username, hashed_password)  # Pass bytes directly to insert_user
             self.conn.commit()
             self.frame.destroy()
             self.create_main_frame()
         except sqlite3.Error as e:
             print("Error inserting user:", e)
+
+
         
 
     def login(self):
@@ -147,25 +162,91 @@ class Application:
         password = self.password_entry_login.get()
         user = fetch_user(self.cursor, username)
 
-        if user and check_password(password, user[1]):
-            error_label.configure(text="")
-            self.frame.destroy()
-            self.main_application(username)
+        if user:
+            # Ensure that the password is passed as bytes if stored as a string in the database
+            stored_password = user[1].encode('utf-8') if isinstance(user[1], str) else user[1]
+            if check_password(password, stored_password):
+                error_label.configure(text="")
+                self.frame.destroy()
+                self.main_application(username)
+            else:
+                error_label.configure(text="Invalid password. Please try again.")
+                self.password_entry_login.delete(0, 'end')
         else:
-            error_label.configure(text="Invalid username or password. Please try again.")
-            self.password_entry_login.delete(0, 'end')
+            error_label.configure(text="Invalid username. Please try again.")
+
 
     def main_application(self, user):
         self.app_frame = ctk.CTkFrame(self.root)
         self.app_frame.place(relx=0.5, rely=0.5, anchor="center", relwidth=1.0, relheight=1.0)
 
-        welcome_label = ctk.CTkLabel(self.app_frame, text=f"Welcome, {user}!")
-        welcome_label.grid(padx=20, pady=20)
+        # Navigation bar frame
+        nav_bar_frame = ctk.CTkFrame(self.app_frame)
+        nav_bar_frame.grid(row=0, column=0, padx=20, pady=10, sticky="ew")
 
-        logout_button = ctk.CTkButton(self.app_frame, text="Logout", command=lambda: self.logout(self.app_frame))
-        logout_button.grid(padx=20, pady=20)
+        # Password Generator Button
+        pw_gen_button = ctk.CTkButton(nav_bar_frame, text="Password Generator", command=self.open_password_generator)
+        pw_gen_button.grid(row=0, column=0, padx=10)
+
+        # Password Vault Button
+        pw_vault_button = ctk.CTkButton(nav_bar_frame, text="Password Vault", command=self.open_password_vault)
+        pw_vault_button.grid(row=0, column=1, padx=10)
+
+        # Secure Notes Button
+        secure_notes_button = ctk.CTkButton(nav_bar_frame, text="Secure Notes", command=self.open_secure_notes)
+        secure_notes_button.grid(row=0, column=2, padx=10)
+
+        # Logout Button
+        logout_button = ctk.CTkButton(nav_bar_frame, text="Logout", command=lambda: self.logout(self.app_frame))
+        logout_button.grid(row=0, column=3, padx=10)
+
+    def open_password_generator(self):
+        # Destroy current app frame and recreate for password generator
+        self.app_frame.destroy()
+        self.app_frame = ctk.CTkFrame(self.root)
+        self.app_frame.place(relx=0.5, rely=0.5, anchor="center", relwidth=1.0, relheight=1.0)
+
+        # Re-create navigation bar in the new frame
+        nav_bar_frame = ctk.CTkFrame(self.app_frame)
+        nav_bar_frame.grid(row=0, column=0, padx=20, pady=10, sticky="ew")
+
+        # Re-add navigation buttons
+        pw_gen_button = ctk.CTkButton(nav_bar_frame, text="Password Generator", command=self.open_password_generator)
+        pw_gen_button.grid(row=0, column=0, padx=10)
+
+        pw_vault_button = ctk.CTkButton(nav_bar_frame, text="Password Vault", command=self.open_password_vault)
+        pw_vault_button.grid(row=0, column=1, padx=10)
+
+        secure_notes_button = ctk.CTkButton(nav_bar_frame, text="Secure Notes", command=self.open_secure_notes)
+        secure_notes_button.grid(row=0, column=2, padx=10)
+
+        logout_button = ctk.CTkButton(nav_bar_frame, text="Logout", command=lambda: self.logout(self.app_frame))
+        logout_button.grid(row=0, column=3, padx=10)
+
+        # Generate Password button
+        generate_btn = ctk.CTkButton(self.app_frame, text="Generate Password", command=self.generate_strong_password)
+        generate_btn.grid(row=1, column=0, padx=20, pady=20)
+
+        # Password display box
+        self.password_display = ctk.CTkEntry(self.app_frame, width=200)
+        self.password_display.grid(row=2, column=0, padx=20, pady=10)
+
+    def generate_strong_password(self):
+        # Example function to generate a strong password
+        characters = string.ascii_letters + string.digits + "!@#$%^&*(),.?\":{}|<>"
+        strong_password = ''.join(secrets.choice(characters) for i in range(12))  # Generates a 12-character password
+        self.password_display.delete(0, 'end')  # Clear the previous password
+        self.password_display.insert(0, strong_password)  # Display the generated password
+
+
+    def open_password_vault(self):
+        # Placeholder for Password Vault functionality
+        print("Opening Password Vault")
+        
+    def open_secure_notes(self):
+        # Placeholder for Secure Notes functionality
+        print("Opening Secure Notes")
 
     def logout(self, frame):
         frame.destroy()
         self.create_main_frame()  # Recreate the initial login/create account frame
-   
