@@ -3,7 +3,7 @@ import re
 import bcrypt
 import secrets
 import string
-from database import *
+from user_accounts import *
 
 class Application:
     def __init__(self, root):
