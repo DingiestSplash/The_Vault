@@ -240,9 +240,20 @@ class Application:
     def copy_to_clipboard(self):
         password = self.password_display.get()
         pyperclip.copy(password)
-        original_color = self.password_display.cget('fg_color')  # Get current foreground color
-        self.password_display.configure(fg_color="green")
-        self.root.after(1500, lambda: self.password_display.config(fg_color=original_color))  # Reset color after 1.5 seconds
+
+        # Check if the copied label exists already, if not create it
+        if not hasattr(self, 'copied_label'):
+            self.copied_label = ctk.CTkLabel(self.app_frame, text="Copied!")
+            # Assuming the button is at row 1, column 0
+            self.copied_label.grid(row=4, column=0, pady=(5, 0))  # Adjust grid position as needed
+
+        # Make the copied label visible
+        self.copied_label.grid()
+
+        # Schedule the copied label to be hidden after 1.5 seconds
+        self.root.after(1500, lambda: self.copied_label.grid_remove())
+
+
 
 
 
