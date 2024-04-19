@@ -4,13 +4,16 @@ import bcrypt
 import secrets
 import string
 import pyperclip
-from user_accounts import *
+from database_management import *
+
+
 
 class Application:
     def __init__(self, root):
         self.root = root
-        self.conn = connect_db()  # Make sure connect_db() is correctly returning a connection object.
-        self.cursor = self.conn.cursor()  # Initialize cursor here.
+        self.db_connection = connect_db()
+        self.user_manager = UserAccountManager(self.db_connection)
+        self.password_manager = None  # This will be initialized after login
         self.create_main_frame()
         
     def set_cursor(self, cursor):
@@ -95,9 +98,7 @@ class Application:
         return True, "Password is strong."
 
     def username_exists(self, username):
-        self.cursor.execute('''SELECT COUNT(*) FROM accounts WHERE username = ?''', (username,))
-        # Fetch the result and return True if the count is greater than 0, indicating the username exists
-        return self.cursor.fetchone()[0] > 0
+        return self.user_manager.username_exists(username)
 
     def handle_account_creation(self):
         username = self.username_entry_create.get()
@@ -123,15 +124,12 @@ class Application:
         try:
         # Hash the password using bcrypt, directly storing the bytes
             hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
-            insert_user(self.cursor, username, hashed_password)  # Pass bytes directly to insert_user
-            self.conn.commit()
+            self.user_manager.insert_user(username, hashed_password)  # Pass bytes directly to insert_user
+            self.db_connection.commit()
             self.frame.destroy()
             self.create_main_frame()
         except sqlite3.Error as e:
             print("Error inserting user:", e)
-
-
-        
 
     def login(self):
         self.create_account_btn.grid_remove()
@@ -160,37 +158,37 @@ class Application:
 
     def handle_login(self, error_label):
         username = self.username_entry_login.get()
-        password = self.password_entry_login.get()
-        user = fetch_user(self.cursor, username)
+        password = self.password_entry_login.get()  # This is retrieved as a string from the entry widget
+        user = self.user_manager.fetch_user(username)
 
         if user:
-            # Ensure that the password is passed as bytes if stored as a string in the database
-            stored_password = user[1].encode('utf-8') if isinstance(user[1], str) else user[1]
-            if check_password(password, stored_password):
-                error_label.configure(text="")
+            stored_password = user[1]  # This should already be in bytes if coming from the database
+            # Ensure the password is in bytes before passing to bcrypt
+            if isinstance(password, str):
+                password_bytes = password.encode('utf-8')
+            else:
+                password_bytes = password  # If it's already bytes, use it directly
+
+            if self.user_manager.check_password(password_bytes, stored_password):
+                error_label.configure(text="Login successful!", fg_color="green")
                 self.frame.destroy()
                 self.main_application(username)
             else:
-                error_label.configure(text="Invalid password. Please try again.")
+                error_label.configure(text="Invalid password. Please try again.", fg_color="red")
                 self.password_entry_login.delete(0, 'end')
         else:
-            error_label.configure(text="Invalid username. Please try again.")
+                error_label.configure(text="Invalid username. Please try again.", fg_color="red")
 
 
-    def main_application(self, user):
-        self.app_frame = ctk.CTkFrame(self.root)
-        self.app_frame.place(relx=0.5, rely=0.5, anchor="center", relwidth=1.0, relheight=1.0)
 
-        # Navigation bar frame
-        nav_bar_frame = ctk.CTkFrame(self.app_frame)
-        nav_bar_frame.grid(row=0, column=0, padx=20, pady=10, sticky="ew")
 
-        # Password Generator Button
-        pw_gen_button = ctk.CTkButton(nav_bar_frame, text="Password Generator", command=self.open_password_generator)
+
+    def create_nav_buttons(self, nav_bar_frame):
+        pw_gen_button = ctk.CTkButton(nav_bar_frame, text="Password Generator", command=self.password_generator)
         pw_gen_button.grid(row=0, column=0, padx=10)
 
         # Password Vault Button
-        pw_vault_button = ctk.CTkButton(nav_bar_frame, text="Password Vault", command=self.open_password_vault)
+        pw_vault_button = ctk.CTkButton(nav_bar_frame, text="Password Vault", command=self.password_vault)
         pw_vault_button.grid(row=0, column=1, padx=10)
 
         # Secure Notes Button
@@ -201,28 +199,25 @@ class Application:
         logout_button = ctk.CTkButton(nav_bar_frame, text="Logout", command=lambda: self.logout(self.app_frame))
         logout_button.grid(row=0, column=3, padx=10)
 
-    def open_password_generator(self):
+    def main_application(self, user):
+        self.app_frame = ctk.CTkFrame(self.root)
+        self.app_frame.place(relx=0.5, rely=0.5, anchor="center", relwidth=1.0, relheight=1.0)
+
+        # Navigation bar frame
+        nav_bar_frame = ctk.CTkFrame(self.app_frame)
+        nav_bar_frame.grid(row=0, column=0, padx=20, pady=10, sticky="ew")
+        self.create_nav_buttons(nav_bar_frame)
+
+    def password_generator(self):
         # Destroy current app frame and recreate for password generator
         self.app_frame.destroy()
         self.app_frame = ctk.CTkFrame(self.root)
         self.app_frame.place(relx=0.5, rely=0.5, anchor="center", relwidth=1.0, relheight=1.0)
 
-        # Re-create navigation bar in the new frame
+        # Navigation bar frame
         nav_bar_frame = ctk.CTkFrame(self.app_frame)
         nav_bar_frame.grid(row=0, column=0, padx=20, pady=10, sticky="ew")
-
-        # Re-add navigation buttons
-        pw_gen_button = ctk.CTkButton(nav_bar_frame, text="Password Generator", command=self.open_password_generator)
-        pw_gen_button.grid(row=0, column=0, padx=10)
-
-        pw_vault_button = ctk.CTkButton(nav_bar_frame, text="Password Vault", command=self.open_password_vault)
-        pw_vault_button.grid(row=0, column=1, padx=10)
-
-        secure_notes_button = ctk.CTkButton(nav_bar_frame, text="Secure Notes", command=self.open_secure_notes)
-        secure_notes_button.grid(row=0, column=2, padx=10)
-
-        logout_button = ctk.CTkButton(nav_bar_frame, text="Logout", command=lambda: self.logout(self.app_frame))
-        logout_button.grid(row=0, column=3, padx=10)
+        self.create_nav_buttons(nav_bar_frame)
 
         # Generate Password button
         generate_btn = ctk.CTkButton(self.app_frame, text="Generate Password", command=self.generate_strong_password)
@@ -264,7 +259,7 @@ class Application:
         self.password_display.delete(0, 'end')  # Clear the previous password
         self.password_display.insert(0, strong_password)  # Display the generated password
 
-    def open_password_vault(self):
+    def password_vault(self):
         # Placeholder for Password Vault functionality
         print("Opening Password Vault")
         
@@ -274,4 +269,6 @@ class Application:
 
     def logout(self, frame):
         frame.destroy()
-        self.create_main_frame()  # Recreate the initial login/create account frame
+        # Properly close the database connection or any other cleanup
+        self.db_connection.close()
+        self.create_main_frame() 
