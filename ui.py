@@ -294,40 +294,108 @@ class Application:
             self.load_passwords()
         except Exception as e:
             messagebox.showerror("Database Error", f"Failed to add password: {e}")
-                   
+      
     def load_passwords(self):
         for widget in self.entries_container.winfo_children():
             widget.destroy()
 
         entries = self.password_manager.get_all_passwords_for_user()
         for idx, entry in enumerate(entries):
-            record_id, website, username, password = entry
-            entry_frame = ctk.CTkFrame(self.entries_container)
-            entry_frame.grid(row=idx, column=0, padx=5, pady=5, sticky="ew")
+            self.setup_buttons(self.entries_container, entry)
+                   
+    def setup_buttons(self, container, record):
+        entry_frame = ctk.CTkFrame(container)
+        entry_frame.grid(sticky='ew', padx=5, pady=5)
 
-            website_label = ctk.CTkLabel(entry_frame, text=website, width=130)
-            website_label.grid(row=0, column=0, padx=10)
-            username_label = ctk.CTkLabel(entry_frame, text=username, width=130)
-            username_label.grid(row=0, column=1, padx=10)
-            password_label = ctk.CTkLabel(entry_frame, text=password, width=130)
-            password_label.grid(row=0, column=2, padx=10)
-            
-            copy_btn = ctk.CTkButton(entry_frame, text="Copy", width=20, command=lambda pwd=password: self.copy_password(pwd))
-            copy_btn.grid(row=0, column=3, padx=5)
+        record_id, website, username, password = record
 
-            edit_btn = ctk.CTkButton(entry_frame, text="Edit", width= 20, command=lambda id=record_id: self.edit_password(id))
-            edit_btn.grid(row=0, column=4, padx=5)
+        website_label = ctk.CTkLabel(entry_frame, text=website, width=130)
+        website_label.grid(row=0, column=0, padx=10)
+        username_label = ctk.CTkLabel(entry_frame, text=username, width=130)
+        username_label.grid(row=0, column=1, padx=10)
+        password_label = ctk.CTkLabel(entry_frame, text=password, width=130)
+        password_label.grid(row=0, column=2, padx=10)
 
-            del_btn = ctk.CTkButton(entry_frame, text="Delete", width= 20, command=lambda id=record_id: self.delete_password(id))
-            del_btn.grid(row=0, column=5, padx=5)
-     
+        copy_btn = ctk.CTkButton(entry_frame, text="Copy", width=20, command=lambda: self.copy_password(password))
+        copy_btn.grid(row=0, column=3, padx=5)
+
+        del_btn = ctk.CTkButton(entry_frame, text="Delete", width=20, command=lambda: self.delete_password(record_id))
+        del_btn.grid(row=0, column=5, padx=5)
+
+        edit_btn = ctk.CTkButton(entry_frame, text="Edit", width=20)
+        edit_btn.grid(row=0, column=4, padx=5)
+        edit_btn.configure(command=self.make_edit_handler(entry_frame, website_label, username_label, password_label, record_id, copy_btn, edit_btn, del_btn))
+
+    def make_copy_handler(self, password):
+        def handler():
+            self.copy_password(password)
+        return handler
+
+    def make_edit_handler(self, entry_frame, website_label, username_label, password_label, record_id, copy_btn, edit_btn, del_btn):
+        def handler():
+            self.edit_password(entry_frame, website_label, username_label, password_label, record_id, copy_btn, edit_btn, del_btn)
+        return handler
+
+    def make_delete_handler(self, record_id):
+        def handler():
+            self.delete_password(record_id)
+        return handler
+    
     def copy_password(self, password):
         pyperclip.copy(password)
         messagebox.showinfo("Copied", "Password copied to clipboard!")
 
-    def edit_password(self, record_id):
-        pass
-    
+    def edit_password(self, entry_frame, website_label, username_label, password_label, record_id, copy_btn, edit_btn, del_btn):
+        website_entry = ctk.CTkEntry(entry_frame, width=130)
+        username_entry = ctk.CTkEntry(entry_frame, width=130)
+        password_entry = ctk.CTkEntry(entry_frame, width=130, show='*')
+
+        website_entry.insert(0, website_label.cget('text'))
+        username_entry.insert(0, username_label.cget('text'))
+        password_entry.insert(0, password_label.cget('text'))
+
+        website_label.grid_remove()
+        username_label.grid_remove()
+        password_label.grid_remove()
+
+        website_entry.grid(row=0, column=0, padx=10)
+        username_entry.grid(row=0, column=1, padx=10)
+        password_entry.grid(row=0, column=2, padx=10)
+
+        copy_btn.grid_remove()
+        edit_btn.grid_remove()
+        del_btn.grid_remove()
+
+        save_btn = ctk.CTkButton(entry_frame, text="Save", width=20)
+        save_btn.grid(row=0, column=3, padx=5)
+        save_btn.configure(command=lambda: self.save_edits(website_entry, username_entry, password_entry, record_id, entry_frame, save_btn, copy_btn, edit_btn, del_btn))
+
+    def save_edits(self, website_entry, username_entry, password_entry, record_id, entry_frame, save_btn, copy_btn, edit_btn, del_btn):
+        self.password_manager.update_password_record(record_id, website_entry.get(), username_entry.get(), password_entry.get())
+
+        website_label = ctk.CTkLabel(entry_frame, text=website_entry.get(), width=130)
+        username_label = ctk.CTkLabel(entry_frame, text=username_entry.get(), width=130)
+        password_label = ctk.CTkLabel(entry_frame, text=password_entry.get(), width=130)
+
+        website_entry.grid_remove()
+        username_entry.grid_remove()
+        password_entry.grid_remove()
+
+        website_label.grid(row=0, column=0, padx=10)
+        username_label.grid(row=0, column=1, padx=10)
+        password_label.grid(row=0, column=2, padx=10)
+
+        save_btn.grid_remove()
+
+        copy_btn.configure(command=lambda pwd=password_label.cget('text'): self.copy_password(pwd))
+        copy_btn.grid(row=0, column=3, padx=5)
+
+        edit_btn.configure(command=lambda w=website_label, u=username_label, p=password_label, id=record_id, b=edit_btn: self.edit_password(w, u, p, id, b))
+        edit_btn.grid(row=0, column=4, padx=5)
+
+        del_btn.configure(command=lambda id=record_id: self.delete_password(id))
+        del_btn.grid(row=0, column=5, padx=5)
+   
     def delete_password(self, record_id):
         try:
             self.password_manager.delete_password_record(record_id)
