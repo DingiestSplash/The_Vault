@@ -376,7 +376,7 @@ class Application:
 
         website_label = ctk.CTkLabel(entry_frame, text=website, width=130)
         website_label.grid(row=0, column=0, padx=10)
-        username_label = ctk.CTkLabel(entry_frame, text=username, width=130)
+        username_label = ctk.CTkLabel(entry_frame, text=username, width=150)
         username_label.grid(row=0, column=1, padx=10)
         password_label = ctk.CTkLabel(entry_frame, text=password, width=130)
         password_label.grid(row=0, column=2, padx=10)
@@ -412,7 +412,7 @@ class Application:
 
     def edit_password(self, entry_frame, website_label, username_label, password_label, record_id, copy_btn, edit_btn, del_btn):
         website_entry = ctk.CTkEntry(entry_frame, width=130)
-        username_entry = ctk.CTkEntry(entry_frame, width=130)
+        username_entry = ctk.CTkEntry(entry_frame, width=150)
         password_entry = ctk.CTkEntry(entry_frame, width=130, show='*')
 
         website_entry.insert(0, website_label.cget('text'))
@@ -486,12 +486,12 @@ class Application:
         self.note_frame = ctk.CTkFrame(self.app_frame)
         self.note_frame.grid(row=1, column=0, padx=20, pady=5, sticky="nsew")
 
-        self.note_selection_frame = ctk.CTkFrame(self.note_frame)
-        self.note_selection_frame.grid(row=0, column=0, padx=20, pady=5, sticky="ew")
+        self.note_selection_frame = ctk.CTkScrollableFrame(self.note_frame, height=345, width=150)
+        self.note_selection_frame.grid(row=0, column=0, padx=10, pady=5, sticky="ew")
         self.load_note_titles()
 
         self.note_creation_frame = ctk.CTkFrame(self.note_frame)
-        self.note_creation_frame.grid(row=0, column=1, padx=20, pady=5, sticky="nsew")
+        self.note_creation_frame.grid(row=0, column=1, padx=10, pady=5, sticky="nsew")
         
         self.note_creation_buttons = ctk.CTkFrame(self.note_creation_frame)
         self.note_creation_buttons.grid(row=3, column=1, padx=20, pady=5, sticky="nsew")
@@ -503,7 +503,7 @@ class Application:
 
         note_label = ctk.CTkLabel(self.note_creation_frame, text="Note:")
         note_label.grid(row=1, column=0, padx=10, pady=5)
-        self.note_text = ctk.CTkTextbox(self.note_creation_frame, height=250, width=275)
+        self.note_text = ctk.CTkTextbox(self.note_creation_frame, height=250, width=400)
         self.note_text.grid(row=1, column=1, padx=10, pady=5, sticky="ew")
 
         save_button = ctk.CTkButton(self.note_creation_buttons, text="Save Note", command=lambda: self.save_or_update_note(self.title_entry.get(), self.note_text.get("1.0", "end-1c")))
@@ -561,6 +561,7 @@ class Application:
         self.password_manager = None
         self.secure_notes_manager = None
         self.user = None
+        self.root.update()  # Force the GUI to update immediately
         self.initial_frame()
  
         
