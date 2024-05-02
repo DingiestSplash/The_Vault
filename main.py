@@ -4,7 +4,7 @@ from ui import Application
 def main():
     root = ctk.CTk()
     root.title("The Vault")
-    root.geometry("680x400")
+    root.geometry("715x420")
     app = Application(root)
     root.mainloop()
 

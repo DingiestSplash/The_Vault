@@ -1,12 +1,15 @@
-import customtkinter as ctk
-import tkinter.simpledialog as simpledialog
 import tkinter.messagebox as messagebox
+import customtkinter as ctk
+from customtkinter import CTkImage
 import re
 import bcrypt
 import secrets
 import string
 import pyperclip
+from pytablericons import TablerIcons, OutlineIcon, FilledIcon
+from PIL import ImageTk
 from database_management import *
+
 
 
 class Application:
@@ -14,7 +17,11 @@ class Application:
         self.root = root
         self.db_connection = connect_db()
         self.user_manager = UserAccountManager(self.db_connection)
-        self.password_manager = None  # This will be initialized after login
+        self.encryption_service = EncryptionService()  
+        self.password_manager = None  
+        self.secure_notes_manager = None 
+        self.user = None 
+        self.user_id = None  
         self.initial_frame()
            
     def set_cursor(self, cursor):
@@ -161,11 +168,11 @@ class Application:
 
         if user:
             stored_password = user[1]
-            if self.user_manager.check_password(password.encode('utf-8'), stored_password):
+            if bcrypt.checkpw(password.encode('utf-8'), stored_password):
                 error_label.configure(text="Login successful!", fg_color="green")
-                self.frame.destroy()
                 user_id = user[0]  # Extract user ID
-                self.password_manager = PasswordVaultManager(self.db_connection, user_id)  # Initialize PasswordVaultManager
+                self.password_manager = PasswordVaultManager(self.db_connection, user_id, self.encryption_service)
+                self.secure_notes_manager = SecureNotesManager(self.db_connection, user_id, self.encryption_service)
                 self.main_application(username)
             else:
                 error_label.configure(text="Invalid password. Please try again.", fg_color="red")
@@ -174,24 +181,31 @@ class Application:
             error_label.configure(text="Invalid username. Please try again.", fg_color="red")
 
 
+
     # Navigation Buttons
     def create_nav_buttons(self, nav_bar_frame):
+        icon_home = TablerIcons.load(OutlineIcon.HOME, size=18, color='#FFFFFF', stroke_width=3.0)
+        ctk_icon_home = ImageTk.PhotoImage(icon_home)
+        home_button = ctk.CTkButton(nav_bar_frame, text="Home", image=ctk_icon_home, command=lambda: self.main_application(self.user), width= 50)
+        home_button.grid(row=0, column=0, padx=10)
+        
         pw_gen_button = ctk.CTkButton(nav_bar_frame, text="Password Generator", command=self.password_generator)
-        pw_gen_button.grid(row=0, column=0, padx=10)
+        pw_gen_button.grid(row=0, column=1, padx=10)
 
         pw_vault_button = ctk.CTkButton(nav_bar_frame, text="Password Vault", command=self.password_vault)
-        pw_vault_button.grid(row=0, column=1, padx=10)
+        pw_vault_button.grid(row=0, column=2, padx=10)
 
-        secure_notes_button = ctk.CTkButton(nav_bar_frame, text="Secure Notes", command=self.open_secure_notes)
-        secure_notes_button.grid(row=0, column=2, padx=10)
+        secure_notes_button = ctk.CTkButton(nav_bar_frame, text="Secure Notes", command=self.secure_notes)
+        secure_notes_button.grid(row=0, column=3, padx=10)
 
-        logout_button = ctk.CTkButton(nav_bar_frame, text="Logout", command=lambda: self.logout(self.app_frame))
-        logout_button.grid(row=0, column=3, padx=10)
+        icon_logout = TablerIcons.load(OutlineIcon.LOGOUT, size=18, color='#FFFFFF', stroke_width=3.0)
+        ctk_icon_logout = ImageTk.PhotoImage(icon_logout)
+        logout_button = ctk.CTkButton(nav_bar_frame, text="Logout", image=ctk_icon_logout, command=lambda: self.logout(self.app_frame), width= 50)
+        logout_button.grid(row=0, column=4, padx=10)
 
 
     # Main Frame - User is now logged in. 
-    # Still not sure what to put on this frame, maybe just welcome message and logo for application.
-    # Really depend how much i expand this application.
+    # Section still under development
     def main_application(self, user):
         self.app_frame = ctk.CTkFrame(self.root)
         self.app_frame.place(relx=0.5, rely=0.5, anchor="center", relwidth=1.0, relheight=1.0)
@@ -199,6 +213,45 @@ class Application:
         nav_bar_frame = ctk.CTkFrame(self.app_frame)
         nav_bar_frame.grid(row=0, column=0, padx=20, pady=5, sticky="ew")
         self.create_nav_buttons(nav_bar_frame)
+    
+        self.main_frame = ctk.CTkFrame(self.app_frame, height= 300, width= 600)
+        self.main_frame.grid(row=1, column=0, padx=20, pady=5, sticky="nsew")
+
+        self.instruction_frame = ctk.CTkFrame(self.main_frame)
+        self.instruction_frame.grid(row=0, column=0, padx=20, pady=5, sticky="ew")
+        self.setup_instructions(user)
+
+        self.setup_key_frame = ctk.CTkFrame(self.main_frame)
+        self.setup_key_frame.grid(row=1, column=0, padx=20, pady=5, sticky="ew")
+
+        self.generate_key_button = ctk.CTkButton(self.setup_key_frame, text="Generate Master Key",
+                                             command=self.generate_master_key)
+        self.generate_key_button.grid(row=1, column=0, pady=20)
+  
+    def setup_instructions(self, username):
+        instruction_label_one = ctk.CTkLabel(self.instruction_frame, text=f"Hello {username}, welcome to your own personal vault. To store passwords and notes safely.")
+        instruction_label_one.grid(row=0, column=0, sticky="ew")  
+        
+        instruction_label_two = ctk.CTkLabel(self.instruction_frame, text="Before you get started you have some things to do")
+        instruction_label_two.grid(row=1, column=0, sticky="ew") 
+        
+        instruction_label_three = ctk.CTkLabel(self.instruction_frame, text="Make sure you have a Up To Date Antivirus installed")
+        instruction_label_three.grid(row=2, column=0, sticky="ew") 
+        
+        instruction_label_four = ctk.CTkLabel(self.instruction_frame, text="Always practice safe browsing habits")
+        instruction_label_four.grid(row=3, column=0, sticky="ew") 
+        
+        instruction_label_five = ctk.CTkLabel(self.instruction_frame, text="Press Generate Master Key!")
+        instruction_label_five.grid(row=4, column=0, sticky="ew") 
+
+    def generate_master_key(self):
+        try:
+            self.password_manager.generate_master_key()
+            messagebox.showinfo("Success", "Master key generated and saved.")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to generate master key: {str(e)}")
+
+
 
     # Password Generator Extension
     def password_generator(self):
@@ -236,6 +289,7 @@ class Application:
         strong_password = ''.join(secrets.choice(characters) for i in range(12))  # Generates a 12-character password
         self.password_display.delete(0, 'end')  # Clear the previous password
         self.password_display.insert(0, strong_password)  # Display the generated password
+
 
 
     # Password Vault Extension
@@ -299,9 +353,20 @@ class Application:
         for widget in self.entries_container.winfo_children():
             widget.destroy()
 
-        entries = self.password_manager.get_all_passwords_for_user()
-        for idx, entry in enumerate(entries):
-            self.setup_buttons(self.entries_container, entry)
+        entries = [] 
+
+        try:
+            entries = self.password_manager.get_all_passwords_for_user()
+            for idx, entry in enumerate(entries):
+                self.setup_buttons(self.entries_container, entry)
+        except Exception as e:
+            print(f"Error loading passwords: {e}")
+            label = ctk.CTkLabel(self.entries_container, text="Failed to load passwords.")
+            label.pack()
+
+        if not entries:
+            label = ctk.CTkLabel(self.entries_container, text="No passwords saved.")
+            label.pack()
                    
     def setup_buttons(self, container, record):
         entry_frame = ctk.CTkFrame(container)
@@ -406,14 +471,96 @@ class Application:
 
 
 
-        
-    def open_secure_notes(self):
-        # Placeholder for Secure Notes functionality
-        print("Opening Secure Notes")
+    # Secure Note Extention 
+    def secure_notes(self):
+        self.app_frame.destroy()
+        self.app_frame = ctk.CTkFrame(self.root)
+        self.app_frame.place(relx=0.5, rely=0.5, anchor="center", relwidth=1.0, relheight=1.0)
+        self.app_frame.grid_rowconfigure(1, weight=1)
+        self.app_frame.grid_columnconfigure(1, weight=1)
 
+        nav_bar_frame = ctk.CTkFrame(self.app_frame)
+        nav_bar_frame.grid(row=0, column=0, padx=20, pady=5, sticky="ew")
+        self.create_nav_buttons(nav_bar_frame)
+
+        self.note_frame = ctk.CTkFrame(self.app_frame)
+        self.note_frame.grid(row=1, column=0, padx=20, pady=5, sticky="nsew")
+
+        self.note_selection_frame = ctk.CTkFrame(self.note_frame)
+        self.note_selection_frame.grid(row=0, column=0, padx=20, pady=5, sticky="ew")
+        self.load_note_titles()
+
+        self.note_creation_frame = ctk.CTkFrame(self.note_frame)
+        self.note_creation_frame.grid(row=0, column=1, padx=20, pady=5, sticky="nsew")
+        
+        self.note_creation_buttons = ctk.CTkFrame(self.note_creation_frame)
+        self.note_creation_buttons.grid(row=3, column=1, padx=20, pady=5, sticky="nsew")
+
+        title_label = ctk.CTkLabel(self.note_creation_frame, text="Title:")
+        title_label.grid(row=0, column=0, padx=10, pady=5)
+        self.title_entry = ctk.CTkEntry(self.note_creation_frame)
+        self.title_entry.grid(row=0, column=1, padx=10, pady=5, sticky="ew")
+
+        note_label = ctk.CTkLabel(self.note_creation_frame, text="Note:")
+        note_label.grid(row=1, column=0, padx=10, pady=5)
+        self.note_text = ctk.CTkTextbox(self.note_creation_frame, height=250, width=275)
+        self.note_text.grid(row=1, column=1, padx=10, pady=5, sticky="ew")
+
+        save_button = ctk.CTkButton(self.note_creation_buttons, text="Save Note", command=lambda: self.save_or_update_note(self.title_entry.get(), self.note_text.get("1.0", "end-1c")))
+        save_button.grid(row=2, column=1, padx=10, pady=10, sticky="ew")
+
+        delete_button = ctk.CTkButton(self.note_creation_buttons, text="Delete Note", command=self.delete_current_note)
+        delete_button.grid(row=2, column=2, padx=10, pady=10, sticky="ew")
+
+    def save_or_update_note(self, title, note):
+        if self.current_note_id:  # There's an existing note, update it
+            self.secure_notes_manager.update_note(self.current_note_id, title, note)
+            messagebox.showinfo("Success", "Note updated successfully!")
+        else:  # No current note, create a new one
+            self.secure_notes_manager.save_note(title, note)
+            messagebox.showinfo("Success", "Note saved successfully!")
+        self.load_note_titles()
+
+    def delete_current_note(self):
+        if self.current_note_id:
+            response = messagebox.askyesno("Confirm Delete", "Are you sure you want to delete this note?")
+            if response:
+                self.secure_notes_manager.delete_note(self.current_note_id)
+                self.title_entry.delete(0, 'end')
+                self.note_text.delete('1.0', 'end')
+                self.current_note_id = None
+                self.load_note_titles()
+                messagebox.showinfo("Success", "Note deleted successfully!")
+        else:
+            messagebox.showwarning("Selection Needed", "No note selected to delete.")
+
+    def load_note_titles(self):
+        for widget in self.note_selection_frame.winfo_children():
+            widget.destroy()
+
+        notes = self.secure_notes_manager.retrieve_titles()
+        for note_id, title in notes:
+            btn = ctk.CTkButton(self.note_selection_frame, text=title or "Untitled", command=lambda nid=note_id: self.display_note(nid))
+            btn.pack(padx=10, pady=2, fill='x')
+
+    def display_note(self, note_id):
+        self.current_note_id = note_id
+        note = self.secure_notes_manager.get_note_by_id(note_id)
+        if note:
+            self.title_entry.delete(0, 'end')
+            self.title_entry.insert(0, note['title'])
+            self.note_text.delete('1.0', 'end')
+            self.note_text.insert('1.0', note['content'])
+        else:
+            messagebox.showerror("Error", "Failed to load the note.")
+      
+      
+           
     def logout(self, frame):
         frame.destroy()
-        # Properly close the database connection or any other cleanup
-        self.db_connection.close()
-        self.initial_frame() 
+        self.password_manager = None
+        self.secure_notes_manager = None
+        self.user = None
+        self.initial_frame()
+ 
         
