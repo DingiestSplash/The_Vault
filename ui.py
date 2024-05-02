@@ -21,7 +21,8 @@ class Application:
         self.password_manager = None  
         self.secure_notes_manager = None 
         self.user = None 
-        self.user_id = None  
+        self.user_id = None
+        self.app_frame = None  
         self.initial_frame()
            
     def set_cursor(self, cursor):
@@ -29,10 +30,8 @@ class Application:
 
     # Initial Frame on First Load - Create Account/Login
     def initial_frame(self):
-        try:
-            self.frame.destroy()
-        except AttributeError:
-            pass
+        if self.app_frame:
+            self.app_frame.destroy()
 
         self.frame = ctk.CTkFrame(self.root)
         self.frame.place(relx=0.5, rely=0.5, anchor="center")
@@ -557,7 +556,7 @@ class Application:
       
            
     def logout(self, frame):
-        frame.destroy()
+        self.frame.destroy()
         self.password_manager = None
         self.secure_notes_manager = None
         self.user = None
